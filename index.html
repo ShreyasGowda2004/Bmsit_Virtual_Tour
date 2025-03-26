@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Interactive 360-degree virtual tour of BMSIT campus" />
+    <meta name="theme-color" content="#000000" />
+    <title>BMSIT Campus Tour</title>
+    <style>
+      /* Base Styles */
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+        font-family: Arial, sans-serif;
+        touch-action: manipulation;
+      }
+      
+      * {
+        box-sizing: border-box;
+      }
+      
+      #root {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+        overflow: hidden;
+      }
+      
+      /* Hide all A-Frame VR UI */
+      .a-enter-vr, 
+      .a-orientation-modal {
+        display: none !important;
+      }
+      
+      /* Loading indicator */
+      .page-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+      }
+      
+      .page-loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      .page-loader-text {
+        color: white;
+        font-size: 24px;
+        margin-top: 20px;
+        text-align: center;
+      }
+      
+      .page-loader-spinner {
+        width: 80px;
+        height: 80px;
+        border: 8px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        border-top: 8px solid white;
+        animation: spin 1s linear infinite;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      /* Tour Controls */
+      .tour-controls {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 15px 20px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        z-index: 100;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      
+      .home-button {
+        background: #1976D2;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 8px 15px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      
+      .location-info {
+        font-size: 16px;
+        font-weight: bold;
+      }
+      
+      .navigation-buttons {
+        display: flex;
+        gap: 10px;
+      }
+      
+      .nav-button {
+        background: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 8px 15px;
+        cursor: pointer;
+      }
+      
+      .prev-button {
+        background: #FF9800;
+      }
+      
+      .nav-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      
+      /* Location Description */
+      .location-description {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        z-index: 100;
+      }
+      
+      .location-description h2 {
+        margin: 0 0 10px 0;
+        font-size: 20px;
+      }
+      
+      .location-description p {
+        margin: 0;
+        font-size: 16px;
+      }
+      
+      /* Mobile Instructions */
+      .mobile-instructions {
+        position: fixed;
+        top: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        text-align: center;
+        z-index: 100;
+        white-space: nowrap;
+        transition: opacity 3s;
+      }
+      
+      .mobile-instructions.fade {
+        opacity: 0;
+      }
+      
+      /* Embedded scene takes full size */
+      .a-scene.embedded {
+        height: 100vh;
+        width: 100vw;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+      }
+      
+      /* Make the canvas touch-friendly */
+      canvas.a-canvas {
+        width: 100% !important;
+        height: 100% !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 1 !important;
+      }
+      
+      /* Media queries for mobile */
+      @media (max-width: 768px) {
+        .tour-controls {
+          flex-direction: column;
+          gap: 10px;
+          padding: 10px;
+        }
+        
+        .navigation-buttons {
+          width: 100%;
+          justify-content: space-between;
+        }
+        
+        .mobile-instructions {
+          top: auto;
+          bottom: 120px;
+        }
+        
+        .location-description {
+          bottom: 10px;
+          left: 10px;
+          right: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- Page loader overlay -->
+    <div class="page-loader" id="page-loader">
+      <div class="page-loader-spinner"></div>
+      <div class="page-loader-text">Loading Campus Tour...</div>
+    </div>
+    
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Hide the page loader after the app loads
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          document.getElementById('page-loader').classList.add('hidden');
+        }, 1500);
+        
+        // Hide mobile instructions after 5 seconds
+        setTimeout(function() {
+          const instructions = document.querySelector('.mobile-instructions');
+          if (instructions) {
+            instructions.classList.add('fade');
+          }
+        }, 5000);
+      });
+    </script>
+  </body>
+</html> 
