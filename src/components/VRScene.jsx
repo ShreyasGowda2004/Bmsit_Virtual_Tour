@@ -450,7 +450,7 @@ export const VRScene = ({ onBackToHome }) => {
   // External panorama URL from Panoraven
   // Adding VR parameter to enable VR mode when the button is clicked
   const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
-  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?mode=stereo&autorotate=true";
+  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?view=stereoscopic&mode=stereo&split=horizontal&autorotate=true";
 
   // Remove WebXR support check and always enable VR mode
   useEffect(() => {
@@ -459,6 +459,43 @@ export const VRScene = ({ onBackToHome }) => {
     meta.name = 'viewport';
     meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     document.getElementsByTagName('head')[0].appendChild(meta);
+    
+    // Add CSS for stereoscopic view
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      .stereo-mode {
+        display: flex !important;
+        flex-direction: row !important;
+        height: 100% !important;
+        width: 100% !important;
+        background-color: black !important;
+      }
+      
+      .stereo-left, .stereo-right {
+        width: 50% !important;
+        height: 100% !important;
+        overflow: hidden !important;
+        position: relative !important;
+      }
+      
+      .stereo-left {
+        border-right: 1px solid black !important;
+      }
+      
+      .stereo-right {
+        border-left: 1px solid black !important;
+      }
+      
+      body.vr-active {
+        overflow: hidden !important;
+        background-color: black !important;
+      }
+      
+      body.vr-active iframe {
+        border-radius: 0 !important;
+      }
+    `;
+    document.head.appendChild(styleElement);
     
     // Listen for orientation changes
     window.addEventListener('orientationchange', () => {
@@ -483,6 +520,9 @@ export const VRScene = ({ onBackToHome }) => {
       try {
         // Always enable stereo mode without checking for WebXR support
         if (!inVRMode) {
+          // Toggle body class for VR mode
+          document.body.classList.add('vr-active');
+          
           // Apply fullscreen if possible
           try {
             if (document.documentElement.requestFullscreen) {
@@ -494,11 +534,37 @@ export const VRScene = ({ onBackToHome }) => {
             console.log('Fullscreen request failed', e);
           }
           
+          // Force screen orientation to landscape if available
+          try {
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape');
+            }
+          } catch (e) {
+            console.log('Screen orientation lock failed', e);
+          }
+          
           // Load the stereo VR panorama
           iframeRef.current.src = vrPanoramaUrl;
           
+          // If panoraven doesn't respond to URL parameters alone,
+          // we'll manually force the split view after a short delay
+          setTimeout(() => {
+            try {
+              // Try to send a message to the iframe
+              iframeRef.current.contentWindow.postMessage({
+                action: 'enableVR',
+                mode: 'stereoscopic'
+              }, '*');
+            } catch (e) {
+              console.log('Post message failed', e);
+            }
+          }, 800);
+          
           console.log("Entering VR mode with stereo view");
         } else {
+          // Remove VR body class
+          document.body.classList.remove('vr-active');
+          
           // Exit fullscreen if active
           try {
             if (document.fullscreenElement && document.exitFullscreen) {
@@ -508,6 +574,15 @@ export const VRScene = ({ onBackToHome }) => {
             }
           } catch (e) {
             console.log('Exit fullscreen failed', e);
+          }
+          
+          // Release screen orientation lock if available
+          try {
+            if (screen.orientation && screen.orientation.unlock) {
+              screen.orientation.unlock();
+            }
+          } catch (e) {
+            console.log('Screen orientation unlock failed', e);
           }
           
           iframeRef.current.src = panoramaUrl;
@@ -658,17 +733,23 @@ export const VRScene = ({ onBackToHome }) => {
   // Render using iframe for external panorama with added VR button
   return (
     <ErrorBoundary onBackToHome={onBackToHome}>
-      <div className="vr-container" style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden' }}>
+      <div className="vr-container" style={{ 
+        width: '100%', 
+        height: '100vh', 
+        position: 'relative', 
+        overflow: 'hidden',
+        backgroundColor: inVRMode ? 'black' : 'transparent'
+      }}>
         <iframe 
           ref={iframeRef}
           width="100%" 
           height="100%" 
           allowFullScreen={true} 
-          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone" 
+          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; screen-orientation" 
           style={{ 
             border: '0 none', 
-            borderRadius: '8px', 
-            boxShadow: '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)',
+            borderRadius: inVRMode ? '0' : '8px', 
+            boxShadow: inVRMode ? 'none' : '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)',
             width: '100%',
             height: '100%',
             objectFit: 'cover'
@@ -687,7 +768,9 @@ export const VRScene = ({ onBackToHome }) => {
           gap: '15px',
           zIndex: 1000,
           padding: '0 10px', // Add padding for small screens
-          flexWrap: 'wrap' // Allow buttons to wrap on very small screens
+          flexWrap: 'wrap', // Allow buttons to wrap on very small screens
+          opacity: inVRMode ? 0.5 : 1, // Reduce opacity in VR mode
+          transition: 'opacity 0.3s ease'
         }}>
           {/* Home Button */}
           <button 
@@ -763,7 +846,7 @@ export const VRScene = ({ onBackToHome }) => {
             transition: 'opacity 0.5s',
             opacity: '0.8'
           }}>
-            For best experience, place your phone in a VR headset or Google Cardboard
+            Place your phone in a VR headset or Google Cardboard for best experience
           </div>
         )}
       </div>
