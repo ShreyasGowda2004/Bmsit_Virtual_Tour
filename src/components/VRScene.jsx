@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 // Import A-Frame once at the component level
 import 'aframe';
 // Import A-Frame React components after A-Frame is loaded
@@ -442,9 +442,66 @@ export const VRScene = ({ onBackToHome }) => {
   const [showNavigationPanel, setShowNavigationPanel] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [currentInfo, setCurrentInfo] = useState('');
+  const [inVRMode, setInVRMode] = useState(false);
+
+  // Reference to the iframe
+  const iframeRef = useRef(null);
 
   // External panorama URL from Panoraven
+  // Adding VR parameter to enable VR mode when the button is clicked
   const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
+  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?vr=true&mode=stereo";
+
+  // Check if WebXR is supported
+  const [vrSupported, setVrSupported] = useState(true);
+
+  // Check WebXR support on component mount
+  useEffect(() => {
+    // Check if WebXR is supported
+    if ('xr' in navigator) {
+      navigator.xr.isSessionSupported('immersive-vr')
+        .then(supported => {
+          setVrSupported(supported);
+          console.log("WebXR immersive-vr supported:", supported);
+        })
+        .catch(err => {
+          console.error("Error checking WebXR support:", err);
+          setVrSupported(false);
+        });
+    } else {
+      console.log("WebXR not available in this browser");
+      setVrSupported(false);
+    }
+  }, []);
+
+  // Function to enter VR mode
+  const enterVRMode = () => {
+    if (iframeRef.current) {
+      try {
+        // Try to enable stereo mode with explicit stereo parameter
+        if (!inVRMode) {
+          iframeRef.current.src = vrPanoramaUrl;
+          
+          // Send explicit message to the iframe
+          setTimeout(() => {
+            iframeRef.current.contentWindow.postMessage({
+              action: 'enableVR',
+              mode: 'stereo'
+            }, '*');
+          }, 500);
+          
+          console.log("Entering VR mode with stereo view");
+        } else {
+          iframeRef.current.src = panoramaUrl;
+          console.log("Exiting VR mode");
+        }
+        
+        setInVRMode(!inVRMode);
+      } catch (err) {
+        console.error("Error toggling VR mode:", err);
+      }
+    }
+  };
 
   // Load the panorama
   useEffect(() => {
@@ -580,37 +637,100 @@ export const VRScene = ({ onBackToHome }) => {
     );
   }
 
-  // Render using iframe for external panorama instead of A-Frame
+  // Render using iframe for external panorama with added VR button
   return (
     <ErrorBoundary onBackToHome={onBackToHome}>
       <div className="vr-container" style={{ width: '100%', height: '100vh', position: 'relative' }}>
         <iframe 
+          ref={iframeRef}
           width="100%" 
           height="100%" 
           allowFullScreen={true} 
-          allow="accelerometer; magnetometer; gyroscope" 
+          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; xr-spatial-tracking" 
           style={{ border: '0 none', borderRadius: '8px', boxShadow: '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)' }} 
           src={panoramaUrl}
         />
         
-        {/* Home Button - Fixed on top */}
-        <button 
-          onClick={onBackToHome}
-          style={{
+        {/* Control Buttons Container */}
+        <div className="vr-controls" style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '0',
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '15px',
+          zIndex: 1000
+        }}>
+          {/* Home Button */}
+          <button 
+            onClick={onBackToHome}
+            style={{
+              padding: '12px 20px',
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M9 22V12H15V22" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Home
+          </button>
+          
+          {/* VR Mode Button */}
+          <button 
+            onClick={enterVRMode}
+            disabled={!vrSupported}
+            style={{
+              padding: '12px 20px',
+              backgroundColor: inVRMode ? 'rgba(0, 153, 255, 0.8)' : (!vrSupported ? 'rgba(150, 150, 150, 0.7)' : 'rgba(0, 0, 0, 0.7)'),
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: vrSupported ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+            }}
+          >
+            <svg width="20" height="14" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19.5 3C19.5 2.20435 19.1839 1.44129 18.6213 0.87868C18.0587 0.316071 17.2956 0 16.5 0H3.5C2.70435 0 1.94129 0.316071 1.37868 0.87868C0.816071 1.44129 0.5 2.20435 0.5 3V11C0.5 11.7956 0.816071 12.5587 1.37868 13.1213C1.94129 13.6839 2.70435 14 3.5 14H16.5C17.2956 14 18.0587 13.6839 18.6213 13.1213C19.1839 12.5587 19.5 11.7956 19.5 11V3ZM2.5 7C2.5 5.93913 2.92143 4.92172 3.67157 4.17157C4.42172 3.42143 5.43913 3 6.5 3C7.56087 3 8.57828 3.42143 9.32843 4.17157C10.0786 4.92172 10.5 5.93913 10.5 7C10.5 8.06087 10.0786 9.07828 9.32843 9.82843C8.57828 10.5786 7.56087 11 6.5 11C5.43913 11 4.42172 10.5786 3.67157 9.82843C2.92143 9.07828 2.5 8.06087 2.5 7ZM13.5 3C14.5609 3 15.5783 3.42143 16.3284 4.17157C17.0786 4.92172 17.5 5.93913 17.5 7C17.5 8.06087 17.0786 9.07828 16.3284 9.82843C15.5783 10.5786 14.5609 11 13.5 11C12.4391 11 11.4217 10.5786 10.6716 9.82843C9.92143 9.07828 9.5 8.06087 9.5 7C9.5 5.93913 9.92143 4.92172 10.6716 4.17157C11.4217 3.42143 12.4391 3 13.5 3Z" fill="white"/>
+            </svg>
+            {!vrSupported ? "VR Not Supported" : (inVRMode ? "Exit VR" : "Enter VR")}
+          </button>
+        </div>
+        
+        {/* VR Support Message */}
+        {!vrSupported && inVRMode && (
+          <div style={{
             position: 'absolute',
             top: '20px',
-            left: '20px',
-            padding: '10px 20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(255, 100, 100, 0.8)',
             color: 'white',
-            border: 'none',
+            padding: '10px 20px',
             borderRadius: '5px',
-            cursor: 'pointer',
-            zIndex: 1000
-          }}
-        >
-          Back to Home
-        </button>
+            zIndex: 1000,
+            maxWidth: '80%',
+            textAlign: 'center'
+          }}>
+            WebXR not supported by your browser or device. Please use a WebXR-compatible browser and device.
+          </div>
+        )}
       </div>
     </ErrorBoundary>
   );
