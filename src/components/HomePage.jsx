@@ -138,11 +138,18 @@ const injectCSS = () => {
     .home-container {
       width: 100vw;
       height: 100vh;
-      background: url('/assets/360-images/background.jpg');
-      background-size: cover;
-      background-position: center;
       position: relative;
       overflow: hidden;
+    }
+    
+    .video-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
     }
     
     .home-container::before {
@@ -753,6 +760,16 @@ export const HomePage = ({ onStartTour }) => {
         onMouseMove={handleMouseMove}
         onMouseLeave={resetTilt}
       >
+        <video
+          className="video-background"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src="/video/background.mp4" type="video/mp4" />
+        </video>
+        
         {/* Background particles */}
         {particles.map((particle) => (
           <div
