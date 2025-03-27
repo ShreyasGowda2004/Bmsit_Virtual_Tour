@@ -448,9 +448,9 @@ export const VRScene = ({ onBackToHome }) => {
   const iframeRef = useRef(null);
 
   // External panorama URL from Panoraven
-  // Adding VR parameter to enable VR mode when the button is clicked
+  // Using dedicated VR mode parameters optimized for VR headsets
   const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
-  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?view=stereoscopic&mode=stereo&split=horizontal&autorotate=true";
+  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?mode=stereo&stereo=true&autorotate=false&gyro=true&cardboard=true";
 
   // Remove WebXR support check and always enable VR mode
   useEffect(() => {
@@ -494,6 +494,39 @@ export const VRScene = ({ onBackToHome }) => {
       body.vr-active iframe {
         border-radius: 0 !important;
       }
+      
+      /* Additional VR fixes for mobile devices */
+      @media screen and (max-width: 767px) {
+        body.vr-active {
+          width: 100vw !important;
+          height: 100vh !important;
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          overflow: hidden !important;
+        }
+        
+        .vr-container.in-vr-mode {
+          position: fixed !important;
+          width: 100vw !important;
+          height: 100vh !important;
+          top: 0 !important;
+          left: 0 !important;
+          z-index: 9999 !important;
+        }
+        
+        .vr-container.in-vr-mode iframe {
+          width: 100vw !important; 
+          height: 100vh !important;
+          border: none !important;
+          box-shadow: none !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+        }
+      }
     `;
     document.head.appendChild(styleElement);
     
@@ -509,8 +542,24 @@ export const VRScene = ({ onBackToHome }) => {
       }
     });
     
+    // Listen for device motion to enable gyroscope
+    window.addEventListener('devicemotion', () => {
+      if (inVRMode && iframeRef.current) {
+        try {
+          // Try to send a message to enable gyroscope in iframe
+          iframeRef.current.contentWindow.postMessage({
+            action: 'enableGyro',
+            enabled: true
+          }, '*');
+        } catch (e) {
+          console.log('Failed to enable gyroscope', e);
+        }
+      }
+    }, { once: true });
+    
     return () => {
       window.removeEventListener('orientationchange', () => {});
+      window.removeEventListener('devicemotion', () => {});
     };
   }, [inVRMode]);
 
@@ -523,6 +572,21 @@ export const VRScene = ({ onBackToHome }) => {
           // Toggle body class for VR mode
           document.body.classList.add('vr-active');
           
+          // Find the VR container and add VR mode class
+          const container = document.querySelector('.vr-container');
+          if (container) {
+            container.classList.add('in-vr-mode');
+          }
+          
+          // Force landscape orientation for mobile
+          try {
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape');
+            }
+          } catch (e) {
+            console.log('Screen orientation lock failed', e);
+          }
+          
           // Apply fullscreen if possible
           try {
             if (document.documentElement.requestFullscreen) {
@@ -534,36 +598,49 @@ export const VRScene = ({ onBackToHome }) => {
             console.log('Fullscreen request failed', e);
           }
           
-          // Force screen orientation to landscape if available
-          try {
-            if (screen.orientation && screen.orientation.lock) {
-              screen.orientation.lock('landscape');
-            }
-          } catch (e) {
-            console.log('Screen orientation lock failed', e);
+          // Add direct parameter for Cardboard mode
+          const cardboardParam = isMobileDevice() ? '&cardboard=true' : '';
+          
+          // Load the stereo VR panorama with appropriate parameters
+          iframeRef.current.src = `${vrPanoramaUrl}${cardboardParam}`;
+          
+          // If using on mobile, specifically target Cardboard mode
+          if (isMobileDevice()) {
+            // Small delay to let iframe load
+            setTimeout(() => {
+              try {
+                // Try multiple methods to activate VR mode
+                
+                // 1. Direct postMessage to iframe
+                iframeRef.current.contentWindow.postMessage({
+                  action: 'enableCardboard',
+                  enabled: true
+                }, '*');
+                
+                // 2. Try to click any cardboard button that might be in the iframe
+                const iframeDoc = iframeRef.current.contentWindow.document;
+                const cardboardBtn = iframeDoc.querySelector('.cardboard-button, .vr-button, [data-vr="true"]');
+                if (cardboardBtn) {
+                  cardboardBtn.click();
+                }
+                
+                console.log("Activated Cardboard mode");
+              } catch (e) {
+                console.log('VR activation attempt failed', e);
+              }
+            }, 1500);
           }
-          
-          // Load the stereo VR panorama
-          iframeRef.current.src = vrPanoramaUrl;
-          
-          // If panoraven doesn't respond to URL parameters alone,
-          // we'll manually force the split view after a short delay
-          setTimeout(() => {
-            try {
-              // Try to send a message to the iframe
-              iframeRef.current.contentWindow.postMessage({
-                action: 'enableVR',
-                mode: 'stereoscopic'
-              }, '*');
-            } catch (e) {
-              console.log('Post message failed', e);
-            }
-          }, 800);
           
           console.log("Entering VR mode with stereo view");
         } else {
           // Remove VR body class
           document.body.classList.remove('vr-active');
+          
+          // Find the VR container and remove VR mode class
+          const container = document.querySelector('.vr-container');
+          if (container) {
+            container.classList.remove('in-vr-mode');
+          }
           
           // Exit fullscreen if active
           try {
@@ -594,6 +671,11 @@ export const VRScene = ({ onBackToHome }) => {
         console.error("Error toggling VR mode:", err);
       }
     }
+  };
+  
+  // Helper function to detect mobile devices
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   };
 
   // Load the panorama
@@ -733,7 +815,7 @@ export const VRScene = ({ onBackToHome }) => {
   // Render using iframe for external panorama with added VR button
   return (
     <ErrorBoundary onBackToHome={onBackToHome}>
-      <div className="vr-container" style={{ 
+      <div className={`vr-container ${inVRMode ? 'in-vr-mode' : ''}`} style={{ 
         width: '100%', 
         height: '100vh', 
         position: 'relative', 
@@ -744,8 +826,9 @@ export const VRScene = ({ onBackToHome }) => {
           ref={iframeRef}
           width="100%" 
           height="100%" 
+          id="vr-iframe"
           allowFullScreen={true} 
-          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; screen-orientation" 
+          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; xr-spatial-tracking; fullscreen" 
           style={{ 
             border: '0 none', 
             borderRadius: inVRMode ? '0' : '8px', 
