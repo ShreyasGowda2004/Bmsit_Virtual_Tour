@@ -450,48 +450,66 @@ export const VRScene = ({ onBackToHome }) => {
   // External panorama URL from Panoraven
   // Adding VR parameter to enable VR mode when the button is clicked
   const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
-  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?vr=true&mode=stereo";
+  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?mode=stereo&autorotate=true";
 
-  // Check if WebXR is supported
-  const [vrSupported, setVrSupported] = useState(true);
-
-  // Check WebXR support on component mount
+  // Remove WebXR support check and always enable VR mode
   useEffect(() => {
-    // Check if WebXR is supported
-    if ('xr' in navigator) {
-      navigator.xr.isSessionSupported('immersive-vr')
-        .then(supported => {
-          setVrSupported(supported);
-          console.log("WebXR immersive-vr supported:", supported);
-        })
-        .catch(err => {
-          console.error("Error checking WebXR support:", err);
-          setVrSupported(false);
-        });
-    } else {
-      console.log("WebXR not available in this browser");
-      setVrSupported(false);
-    }
-  }, []);
+    // Add viewport meta tag to ensure proper mobile display
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.getElementsByTagName('head')[0].appendChild(meta);
+    
+    // Listen for orientation changes
+    window.addEventListener('orientationchange', () => {
+      console.log('Orientation changed');
+      if (inVRMode) {
+        // Force reload of the iframe when orientation changes in VR mode
+        if (iframeRef.current) {
+          const currentSrc = iframeRef.current.src;
+          iframeRef.current.src = currentSrc;
+        }
+      }
+    });
+    
+    return () => {
+      window.removeEventListener('orientationchange', () => {});
+    };
+  }, [inVRMode]);
 
   // Function to enter VR mode
   const enterVRMode = () => {
     if (iframeRef.current) {
       try {
-        // Try to enable stereo mode with explicit stereo parameter
+        // Always enable stereo mode without checking for WebXR support
         if (!inVRMode) {
-          iframeRef.current.src = vrPanoramaUrl;
+          // Apply fullscreen if possible
+          try {
+            if (document.documentElement.requestFullscreen) {
+              document.documentElement.requestFullscreen();
+            } else if (document.documentElement.webkitRequestFullscreen) {
+              document.documentElement.webkitRequestFullscreen();
+            }
+          } catch (e) {
+            console.log('Fullscreen request failed', e);
+          }
           
-          // Send explicit message to the iframe
-          setTimeout(() => {
-            iframeRef.current.contentWindow.postMessage({
-              action: 'enableVR',
-              mode: 'stereo'
-            }, '*');
-          }, 500);
+          // Load the stereo VR panorama
+          iframeRef.current.src = vrPanoramaUrl;
           
           console.log("Entering VR mode with stereo view");
         } else {
+          // Exit fullscreen if active
+          try {
+            if (document.fullscreenElement && document.exitFullscreen) {
+              document.exitFullscreen();
+            } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+              document.webkitExitFullscreen();
+            }
+          } catch (e) {
+            console.log('Exit fullscreen failed', e);
+          }
+          
           iframeRef.current.src = panoramaUrl;
           console.log("Exiting VR mode");
         }
@@ -640,18 +658,25 @@ export const VRScene = ({ onBackToHome }) => {
   // Render using iframe for external panorama with added VR button
   return (
     <ErrorBoundary onBackToHome={onBackToHome}>
-      <div className="vr-container" style={{ width: '100%', height: '100vh', position: 'relative' }}>
+      <div className="vr-container" style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden' }}>
         <iframe 
           ref={iframeRef}
           width="100%" 
           height="100%" 
           allowFullScreen={true} 
-          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; xr-spatial-tracking" 
-          style={{ border: '0 none', borderRadius: '8px', boxShadow: '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)' }} 
+          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone" 
+          style={{ 
+            border: '0 none', 
+            borderRadius: '8px', 
+            boxShadow: '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }} 
           src={panoramaUrl}
         />
         
-        {/* Control Buttons Container */}
+        {/* Control Buttons Container - Responsive positioning */}
         <div className="vr-controls" style={{
           position: 'absolute',
           bottom: '20px',
@@ -660,7 +685,9 @@ export const VRScene = ({ onBackToHome }) => {
           display: 'flex',
           justifyContent: 'center',
           gap: '15px',
-          zIndex: 1000
+          zIndex: 1000,
+          padding: '0 10px', // Add padding for small screens
+          flexWrap: 'wrap' // Allow buttons to wrap on very small screens
         }}>
           {/* Home Button */}
           <button 
@@ -677,7 +704,10 @@ export const VRScene = ({ onBackToHome }) => {
               gap: '8px',
               fontSize: '14px',
               fontWeight: 'bold',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+              margin: '5px', // Add margin for small screens
+              minWidth: '100px', // Ensure minimum touchable area
+              justifyContent: 'center' // Center content
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -687,48 +717,53 @@ export const VRScene = ({ onBackToHome }) => {
             Home
           </button>
           
-          {/* VR Mode Button */}
+          {/* VR Mode Button - Always enabled */}
           <button 
             onClick={enterVRMode}
-            disabled={!vrSupported}
             style={{
               padding: '12px 20px',
-              backgroundColor: inVRMode ? 'rgba(0, 153, 255, 0.8)' : (!vrSupported ? 'rgba(150, 150, 150, 0.7)' : 'rgba(0, 0, 0, 0.7)'),
+              backgroundColor: inVRMode ? 'rgba(0, 153, 255, 0.8)' : 'rgba(0, 0, 0, 0.7)',
               color: 'white',
               border: 'none',
               borderRadius: '5px',
-              cursor: vrSupported ? 'pointer' : 'not-allowed',
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
               fontWeight: 'bold',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+              margin: '5px', // Add margin for small screens
+              minWidth: '100px', // Ensure minimum touchable area
+              justifyContent: 'center' // Center content
             }}
           >
             <svg width="20" height="14" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M19.5 3C19.5 2.20435 19.1839 1.44129 18.6213 0.87868C18.0587 0.316071 17.2956 0 16.5 0H3.5C2.70435 0 1.94129 0.316071 1.37868 0.87868C0.816071 1.44129 0.5 2.20435 0.5 3V11C0.5 11.7956 0.816071 12.5587 1.37868 13.1213C1.94129 13.6839 2.70435 14 3.5 14H16.5C17.2956 14 18.0587 13.6839 18.6213 13.1213C19.1839 12.5587 19.5 11.7956 19.5 11V3ZM2.5 7C2.5 5.93913 2.92143 4.92172 3.67157 4.17157C4.42172 3.42143 5.43913 3 6.5 3C7.56087 3 8.57828 3.42143 9.32843 4.17157C10.0786 4.92172 10.5 5.93913 10.5 7C10.5 8.06087 10.0786 9.07828 9.32843 9.82843C8.57828 10.5786 7.56087 11 6.5 11C5.43913 11 4.42172 10.5786 3.67157 9.82843C2.92143 9.07828 2.5 8.06087 2.5 7ZM13.5 3C14.5609 3 15.5783 3.42143 16.3284 4.17157C17.0786 4.92172 17.5 5.93913 17.5 7C17.5 8.06087 17.0786 9.07828 16.3284 9.82843C15.5783 10.5786 14.5609 11 13.5 11C12.4391 11 11.4217 10.5786 10.6716 9.82843C9.92143 9.07828 9.5 8.06087 9.5 7C9.5 5.93913 9.92143 4.92172 10.6716 4.17157C11.4217 3.42143 12.4391 3 13.5 3Z" fill="white"/>
             </svg>
-            {!vrSupported ? "VR Not Supported" : (inVRMode ? "Exit VR" : "Enter VR")}
+            {inVRMode ? "Exit VR" : "Enter VR"}
           </button>
         </div>
         
-        {/* VR Support Message */}
-        {!vrSupported && inVRMode && (
+        {/* Instructions overlay - only show when in VR mode */}
+        {inVRMode && (
           <div style={{
             position: 'absolute',
             top: '20px',
             left: '50%',
             transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(255, 100, 100, 0.8)',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
             color: 'white',
             padding: '10px 20px',
             borderRadius: '5px',
             zIndex: 1000,
-            maxWidth: '80%',
-            textAlign: 'center'
+            maxWidth: '90%',
+            textAlign: 'center',
+            fontSize: '14px',
+            transition: 'opacity 0.5s',
+            opacity: '0.8'
           }}>
-            WebXR not supported by your browser or device. Please use a WebXR-compatible browser and device.
+            For best experience, place your phone in a VR headset or Google Cardboard
           </div>
         )}
       </div>
