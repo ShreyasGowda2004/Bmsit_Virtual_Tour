@@ -448,9 +448,9 @@ export const VRScene = ({ onBackToHome }) => {
   const iframeRef = useRef(null);
 
   // External panorama URL from Panoraven
-  // Using dedicated VR mode parameters optimized for VR headsets
+  // Using standard mode for panorama, we'll handle the split manually
   const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
-  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?mode=stereo&stereo=true&autorotate=false&gyro=true&cardboard=true";
+  const vrPanoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD?autorotate=false&gyro=true";
 
   // Remove WebXR support check and always enable VR mode
   useEffect(() => {
@@ -460,18 +460,23 @@ export const VRScene = ({ onBackToHome }) => {
     meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     document.getElementsByTagName('head')[0].appendChild(meta);
     
-    // Add CSS for stereoscopic view
+    // Add CSS for manual stereoscopic view
     const styleElement = document.createElement('style');
     styleElement.textContent = `
-      .stereo-mode {
+      .stereo-container {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
         display: flex !important;
         flex-direction: row !important;
-        height: 100% !important;
-        width: 100% !important;
-        background-color: black !important;
+        background-color: #000000 !important;
+        z-index: 9999 !important;
+        overflow: hidden !important;
       }
       
-      .stereo-left, .stereo-right {
+      .stereo-eye {
         width: 50% !important;
         height: 100% !important;
         overflow: hidden !important;
@@ -479,20 +484,34 @@ export const VRScene = ({ onBackToHome }) => {
       }
       
       .stereo-left {
-        border-right: 1px solid black !important;
+        border-right: 1px solid #000 !important;
       }
       
       .stereo-right {
-        border-left: 1px solid black !important;
+        border-left: 1px solid #000 !important;
+      }
+      
+      .stereo-iframe {
+        width: 200% !important; 
+        height: 100% !important;
+        border: none !important;
+        position: absolute !important;
+      }
+      
+      .stereo-left .stereo-iframe {
+        left: 0 !important;
+      }
+      
+      .stereo-right .stereo-iframe {
+        left: -100% !important;
       }
       
       body.vr-active {
         overflow: hidden !important;
         background-color: black !important;
-      }
-      
-      body.vr-active iframe {
-        border-radius: 0 !important;
+        position: fixed;
+        width: 100%;
+        height: 100%;
       }
       
       /* Additional VR fixes for mobile devices */
@@ -505,26 +524,6 @@ export const VRScene = ({ onBackToHome }) => {
           left: 0 !important;
           right: 0 !important;
           bottom: 0 !important;
-          overflow: hidden !important;
-        }
-        
-        .vr-container.in-vr-mode {
-          position: fixed !important;
-          width: 100vw !important;
-          height: 100vh !important;
-          top: 0 !important;
-          left: 0 !important;
-          z-index: 9999 !important;
-        }
-        
-        .vr-container.in-vr-mode iframe {
-          width: 100vw !important; 
-          height: 100vh !important;
-          border: none !important;
-          box-shadow: none !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
         }
       }
     `;
@@ -535,141 +534,88 @@ export const VRScene = ({ onBackToHome }) => {
       console.log('Orientation changed');
       if (inVRMode) {
         // Force reload of the iframe when orientation changes in VR mode
-        if (iframeRef.current) {
-          const currentSrc = iframeRef.current.src;
-          iframeRef.current.src = currentSrc;
-        }
+        refreshStereoView();
       }
     });
     
-    // Listen for device motion to enable gyroscope
-    window.addEventListener('devicemotion', () => {
-      if (inVRMode && iframeRef.current) {
-        try {
-          // Try to send a message to enable gyroscope in iframe
-          iframeRef.current.contentWindow.postMessage({
-            action: 'enableGyro',
-            enabled: true
-          }, '*');
-        } catch (e) {
-          console.log('Failed to enable gyroscope', e);
-        }
-      }
-    }, { once: true });
-    
     return () => {
       window.removeEventListener('orientationchange', () => {});
-      window.removeEventListener('devicemotion', () => {});
     };
   }, [inVRMode]);
 
+  // Reference to left and right iframes
+  const leftIframeRef = useRef(null);
+  const rightIframeRef = useRef(null);
+  const stereoContainerRef = useRef(null);
+
+  // Function to refresh stereo view
+  const refreshStereoView = () => {
+    if (leftIframeRef.current && rightIframeRef.current) {
+      const currentSrc = leftIframeRef.current.src;
+      leftIframeRef.current.src = currentSrc;
+      rightIframeRef.current.src = currentSrc;
+    }
+  };
+
   // Function to enter VR mode
   const enterVRMode = () => {
-    if (iframeRef.current) {
-      try {
-        // Always enable stereo mode without checking for WebXR support
-        if (!inVRMode) {
-          // Toggle body class for VR mode
-          document.body.classList.add('vr-active');
-          
-          // Find the VR container and add VR mode class
-          const container = document.querySelector('.vr-container');
-          if (container) {
-            container.classList.add('in-vr-mode');
+    try {
+      // Always enable stereo mode without checking for WebXR support
+      if (!inVRMode) {
+        // Toggle body class for VR mode
+        document.body.classList.add('vr-active');
+        
+        // Force landscape orientation for mobile
+        try {
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape');
           }
-          
-          // Force landscape orientation for mobile
-          try {
-            if (screen.orientation && screen.orientation.lock) {
-              screen.orientation.lock('landscape');
-            }
-          } catch (e) {
-            console.log('Screen orientation lock failed', e);
-          }
-          
-          // Apply fullscreen if possible
-          try {
-            if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen();
-            } else if (document.documentElement.webkitRequestFullscreen) {
-              document.documentElement.webkitRequestFullscreen();
-            }
-          } catch (e) {
-            console.log('Fullscreen request failed', e);
-          }
-          
-          // Add direct parameter for Cardboard mode
-          const cardboardParam = isMobileDevice() ? '&cardboard=true' : '';
-          
-          // Load the stereo VR panorama with appropriate parameters
-          iframeRef.current.src = `${vrPanoramaUrl}${cardboardParam}`;
-          
-          // If using on mobile, specifically target Cardboard mode
-          if (isMobileDevice()) {
-            // Small delay to let iframe load
-            setTimeout(() => {
-              try {
-                // Try multiple methods to activate VR mode
-                
-                // 1. Direct postMessage to iframe
-                iframeRef.current.contentWindow.postMessage({
-                  action: 'enableCardboard',
-                  enabled: true
-                }, '*');
-                
-                // 2. Try to click any cardboard button that might be in the iframe
-                const iframeDoc = iframeRef.current.contentWindow.document;
-                const cardboardBtn = iframeDoc.querySelector('.cardboard-button, .vr-button, [data-vr="true"]');
-                if (cardboardBtn) {
-                  cardboardBtn.click();
-                }
-                
-                console.log("Activated Cardboard mode");
-              } catch (e) {
-                console.log('VR activation attempt failed', e);
-              }
-            }, 1500);
-          }
-          
-          console.log("Entering VR mode with stereo view");
-        } else {
-          // Remove VR body class
-          document.body.classList.remove('vr-active');
-          
-          // Find the VR container and remove VR mode class
-          const container = document.querySelector('.vr-container');
-          if (container) {
-            container.classList.remove('in-vr-mode');
-          }
-          
-          // Exit fullscreen if active
-          try {
-            if (document.fullscreenElement && document.exitFullscreen) {
-              document.exitFullscreen();
-            } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
-              document.webkitExitFullscreen();
-            }
-          } catch (e) {
-            console.log('Exit fullscreen failed', e);
-          }
-          
-          // Release screen orientation lock if available
-          try {
-            if (screen.orientation && screen.orientation.unlock) {
-              screen.orientation.unlock();
-            }
-          } catch (e) {
-            console.log('Screen orientation unlock failed', e);
-          }
-          
-          iframeRef.current.src = panoramaUrl;
-          console.log("Exiting VR mode");
+        } catch (e) {
+          console.log('Screen orientation lock failed', e);
         }
         
-        setInVRMode(!inVRMode);
-      } catch (err) {
-        console.error("Error toggling VR mode:", err);
+        // Apply fullscreen if possible
+        try {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+          }
+        } catch (e) {
+          console.log('Fullscreen request failed', e);
+        }
+        
+        console.log("Entering VR mode with stereo view");
+      } else {
+        // Remove VR body class
+        document.body.classList.remove('vr-active');
+        
+        // Exit fullscreen if active
+        try {
+          if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        } catch (e) {
+          console.log('Exit fullscreen failed', e);
+        }
+        
+        // Release screen orientation lock if available
+        try {
+          if (screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock();
+          }
+        } catch (e) {
+          console.log('Screen orientation unlock failed', e);
+        }
+        
+        console.log("Exiting VR mode");
       }
+      
+      setInVRMode(!inVRMode);
+    } catch (err) {
+      console.error("Error toggling VR mode:", err);
     }
   };
   
@@ -815,30 +761,60 @@ export const VRScene = ({ onBackToHome }) => {
   // Render using iframe for external panorama with added VR button
   return (
     <ErrorBoundary onBackToHome={onBackToHome}>
-      <div className={`vr-container ${inVRMode ? 'in-vr-mode' : ''}`} style={{ 
+      <div className="vr-container" style={{ 
         width: '100%', 
         height: '100vh', 
         position: 'relative', 
         overflow: 'hidden',
         backgroundColor: inVRMode ? 'black' : 'transparent'
       }}>
-        <iframe 
-          ref={iframeRef}
-          width="100%" 
-          height="100%" 
-          id="vr-iframe"
-          allowFullScreen={true} 
-          allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; xr-spatial-tracking; fullscreen" 
-          style={{ 
-            border: '0 none', 
-            borderRadius: inVRMode ? '0' : '8px', 
-            boxShadow: inVRMode ? 'none' : '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)',
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover'
-          }} 
-          src={panoramaUrl}
-        />
+        {/* Single iframe for normal mode */}
+        {!inVRMode && (
+          <iframe 
+            ref={iframeRef}
+            width="100%" 
+            height="100%" 
+            id="vr-iframe"
+            allowFullScreen={true} 
+            allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; xr-spatial-tracking; fullscreen" 
+            style={{ 
+              border: '0 none', 
+              borderRadius: '8px', 
+              boxShadow: '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)',
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }} 
+            src={panoramaUrl}
+          />
+        )}
+        
+        {/* Stereoscopic split view for VR mode */}
+        {inVRMode && (
+          <div ref={stereoContainerRef} className="stereo-container">
+            {/* Left eye */}
+            <div className="stereo-eye stereo-left">
+              <iframe 
+                ref={leftIframeRef}
+                className="stereo-iframe"
+                allowFullScreen={true} 
+                allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; fullscreen" 
+                src={vrPanoramaUrl}
+              />
+            </div>
+            
+            {/* Right eye */}
+            <div className="stereo-eye stereo-right">
+              <iframe 
+                ref={rightIframeRef}
+                className="stereo-iframe"
+                allowFullScreen={true} 
+                allow="accelerometer; autoplay; camera; gyroscope; magnetometer; microphone; fullscreen" 
+                src={vrPanoramaUrl}
+              />
+            </div>
+          </div>
+        )}
         
         {/* Control Buttons Container - Responsive positioning */}
         <div className="vr-controls" style={{
@@ -849,10 +825,10 @@ export const VRScene = ({ onBackToHome }) => {
           display: 'flex',
           justifyContent: 'center',
           gap: '15px',
-          zIndex: 1000,
+          zIndex: 10000,
           padding: '0 10px', // Add padding for small screens
           flexWrap: 'wrap', // Allow buttons to wrap on very small screens
-          opacity: inVRMode ? 0.5 : 1, // Reduce opacity in VR mode
+          opacity: inVRMode ? 0.7 : 1, // Reduce opacity in VR mode
           transition: 'opacity 0.3s ease'
         }}>
           {/* Home Button */}
@@ -915,21 +891,21 @@ export const VRScene = ({ onBackToHome }) => {
         {inVRMode && (
           <div style={{
             position: 'absolute',
-            top: '20px',
+            top: '10px',
             left: '50%',
             transform: 'translateX(-50%)',
             backgroundColor: 'rgba(0, 0, 0, 0.7)',
             color: 'white',
             padding: '10px 20px',
             borderRadius: '5px',
-            zIndex: 1000,
+            zIndex: 10000,
             maxWidth: '90%',
             textAlign: 'center',
             fontSize: '14px',
             transition: 'opacity 0.5s',
             opacity: '0.8'
           }}>
-            Place your phone in a VR headset or Google Cardboard for best experience
+            Place your phone in a VR headset for stereoscopic viewing
           </div>
         )}
       </div>
