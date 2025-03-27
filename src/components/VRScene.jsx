@@ -443,11 +443,50 @@ export const VRScene = ({ onBackToHome }) => {
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [currentInfo, setCurrentInfo] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showAvatar, setShowAvatar] = useState(true);
+  const [showRobotMessage, setShowRobotMessage] = useState(false);
+  const [isRobotTalking, setIsRobotTalking] = useState(false);
+  const [isRobotWalking, setIsRobotWalking] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState('welcome');
+  const [showLocationMenu, setShowLocationMenu] = useState(false);
+  const [showAssistancePrompt, setShowAssistancePrompt] = useState(true);
 
   // Reference to the iframe and audio
   const iframeRef = useRef(null);
   const audioRef = useRef(null);
+
+  // College locations data
+  const collegeLocations = {
+    welcome: {
+      title: "BMSIT College Information",
+      description: "BMS Institute of Technology and Management (BMSIT&M) is a premier engineering college established in 2002 under the BMS Educational Trust. Located in Yelahanka, Bangalore, it offers undergraduate, postgraduate, and doctoral programs across various engineering disciplines. BMSIT&M received autonomous status in 2020 from Visvesvaraya Technological University (VTU) and is accredited by NAAC with an 'A' grade. The campus spans 21 acres with state-of-the-art facilities including advanced laboratories, a central library with over 60,000 volumes, sports facilities, and separate hostels for boys and girls.",
+      audioFile: "/voicce/welcome.mp3"
+    },
+    bsnBlock: {
+      title: "BSN Block",
+      description: "The BS Narayan (BSN) Block at BMSIT&M is a six-story building (ground floor plus five floors) housing the library and IT departments (Computer Science and Information Science). It features modern classrooms, specialized labs, and high-speed internet connectivity, making it a central hub for IT education and research.",
+      audioFile: "/voicce/bsn.mp3"
+    },
+    academicBlock: {
+      title: "Academic Block",
+      description: "The Academic Block is a four-story building that houses the Principal's Office, Accounts Section, and Examination Section. It also accommodates the Electronics, Electrical & Electronics, and Mechanical departments, creating a collaborative environment for academic and administrative activities.",
+      audioFile: "/voicce/acadamic.mp3"
+    },
+    labBlock: {
+      title: "Lab Block",
+      description: "The Lab Block is a five-story building featuring the Placement Office, NCC unit, BICEP (BMS Innovation Centre and Entrepreneurship Park), BSN Auditorium, CSE departments, Civil labs, and MBA classrooms. It is a central hub for academic, research, and extracurricular activities.",
+      audioFile: "/voicce/lab.mp3"
+    },
+    coffeeKuteera: {
+      title: "Coffee Kuteera",
+      description: "Coffee Kuteera is a cozy spot offering freshly brewed coffee, tea, cool drinks, and a tasty selection of breakfast and lunch options—ideal for relaxing and socializing.",
+      audioFile: "/voicce/kuteera.mp3"
+    },
+    bmssa: {
+      title: "BMS School of Architecture",
+      description: "BMS School of Architecture (BMSSA), established in 2010 under the BMS Educational Trust, is located in Yelahanka, Bangalore. The institution offers undergraduate (B.Arch), postgraduate (M.Arch in Urban Design), and Ph.D. programs in architecture. Affiliated with Visvesvaraya Technological University and recognized by the Council of Architecture, BMSSA provides a comprehensive architectural education. The campus features modern facilities and emphasizes both theoretical knowledge and practical application, fostering innovation and exploration in the field of architecture.",
+      audioFile: "/voicce/bmssa.mp3"
+    }
+  };
 
   // External panorama URL from Panoraven
   const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
@@ -472,111 +511,150 @@ export const VRScene = ({ onBackToHome }) => {
 
   // Play welcome message when tour loads
   useEffect(() => {
-    if (!isLoading && showAvatar && audioRef.current) {
-      // Play audio after a small delay to ensure everything is loaded
-      const timer = setTimeout(() => {
-        audioRef.current.play().catch(err => {
-          console.error("Error playing audio:", err);
-        });
-      }, 500);
+    if (!isLoading && audioRef.current) {
+      // Only set up the audio ended event handler
+      audioRef.current.onended = () => {
+        setIsRobotTalking(false);
+      };
       
-      return () => clearTimeout(timer);
+      return () => {
+        if (audioRef.current) {
+          audioRef.current.onended = null;
+        }
+      };
     }
-  }, [isLoading, showAvatar]);
+  }, [isLoading, currentLocation]);
 
-  // Add CSS for avatar
+  // Add CSS for robot assistant
   useEffect(() => {
     const styleElement = document.createElement('style');
     styleElement.textContent = `
-      .avatar-container {
-        position: absolute;
-        bottom: 70px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        z-index: 1000;
-        transition: all 0.3s ease-in-out;
-      }
-      
-      .avatar-circle {
+      .robot-assistant {
+        position: fixed;
+        right: 20px;
+        bottom: 100px;
         width: 120px;
         height: 120px;
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
-        border: 2px solid rgba(0, 123, 255, 0.5);
-        overflow: hidden;
-        margin-bottom: 15px;
+        z-index: 1000;
+        cursor: pointer;
+        transform-origin: bottom center;
       }
       
-      .avatar-image {
-        width: 90%;
-        height: 90%;
-        object-fit: cover;
-        border-radius: 50%;
+      .robot-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
       }
       
-      .avatar-message {
-        background: rgba(0, 0, 0, 0.7);
-        padding: 15px 25px;
-        border-radius: 20px;
-        color: white;
-        max-width: 80%;
-        text-align: center;
-        font-size: 16px;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(5px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        margin-bottom: 10px;
+      .robot-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.3));
+        transition: transform 0.3s ease;
       }
       
-      .avatar-close {
+      .robot-image:hover {
+        transform: scale(1.05);
+      }
+      
+      .robot-message {
         position: absolute;
-        top: -10px;
-        right: -10px;
-        width: 30px;
-        height: 30px;
-        background: rgba(255, 0, 0, 0.7);
-        border-radius: 50%;
+        bottom: 110%;
+        right: -30px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 12px;
+        width: 320px;
+        max-height: 400px;
+        overflow-y: auto;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        transform-origin: bottom right;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(0, 123, 255, 0.5);
+        pointer-events: auto;
+      }
+      
+      .robot-message:after {
+        display: none; /* Hide the reversed triangle */
+      }
+      
+      .robot-message.hidden {
+        opacity: 0;
+        transform: scale(0.8);
+        pointer-events: none;
+      }
+      
+      .robot-title {
+        color: rgba(0, 123, 255, 1);
+        font-weight: bold;
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+      
+      .robot-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 24px;
+        height: 24px;
+        background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+        border-radius: 4px;
         display: flex;
         justify-content: center;
         align-items: center;
         cursor: pointer;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-        color: white;
-        font-weight: bold;
         border: none;
-        font-size: 16px;
+        z-index: 10;
+        transition: all 0.15s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       }
       
-      .avatar-title {
-        color: rgba(0, 123, 255, 1);
-        font-weight: bold;
-        margin-bottom: 5px;
-        font-size: 18px;
+      .robot-close:hover {
+        background: linear-gradient(135deg, #f55549 0%, #e33e3e 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
       }
       
-      .avatar-container.hidden {
-        opacity: 0;
-        transform: translateY(50px) translateX(-50%);
-        pointer-events: none;
+      .robot-close:active {
+        transform: translateY(1px);
+        box-shadow: 0 0 2px rgba(0, 0, 0, 0.4);
+      }
+      
+      .robot-close:before, .robot-close:after {
+        content: '';
+        position: absolute;
+        width: 14px;
+        height: 2px;
+        background-color: white;
+        border-radius: 1px;
+      }
+      
+      .robot-close:before {
+        transform: rotate(45deg);
+      }
+      
+      .robot-close:after {
+        transform: rotate(-45deg);
+      }
+      
+      .robot-text {
+        font-size: 14px;
+        line-height: 1.4;
       }
       
       .listening-indicator {
         display: flex;
-        justify-content: center;
+        justify-content: flex-start;
         gap: 4px;
-        margin-top: 5px;
+        margin-top: 8px;
+        height: 10px;
       }
       
       .listening-dot {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         background-color: #0078ff;
         border-radius: 50%;
         animation: pulse 1.5s infinite ease-in-out;
@@ -591,18 +669,115 @@ export const VRScene = ({ onBackToHome }) => {
       }
       
       @keyframes pulse {
-        0% {
-          transform: scale(0.8);
-          opacity: 0.5;
-        }
-        50% {
-          transform: scale(1.2);
-          opacity: 1;
-        }
-        100% {
-          transform: scale(0.8);
-          opacity: 0.5;
-        }
+        0% { transform: scale(0.8); opacity: 0.5; }
+        50% { transform: scale(1.2); opacity: 1; }
+        100% { transform: scale(0.8); opacity: 0.5; }
+      }
+      
+      .location-menu {
+        margin-top: 15px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      
+      .location-item {
+        background: rgba(0, 123, 255, 0.2);
+        border: 1px solid rgba(0, 123, 255, 0.4);
+        border-radius: 5px;
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      
+      .location-item:hover {
+        background: rgba(0, 123, 255, 0.3);
+      }
+      
+      .location-item.active {
+        background: rgba(0, 123, 255, 0.4);
+        border-color: rgba(0, 123, 255, 0.8);
+      }
+      
+      .play-button {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(0, 123, 255, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-left: 8px;
+        flex-shrink: 0;
+      }
+      
+      .play-button:hover {
+        background: rgba(0, 123, 255, 1);
+        transform: scale(1.1);
+      }
+      
+      .stop-button {
+        display: none; /* Hide the stop button */
+      }
+      
+      .menu-button {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: 5px;
+        padding: 5px 10px;
+        color: white;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      
+      .menu-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      
+      .assistance-prompt {
+        position: absolute;
+        bottom: 130px;
+        right: 80px;
+        background: rgba(0, 123, 255, 0.9);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+        animation: float 3s infinite ease-in-out;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      
+      @keyframes float {
+        0% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+        100% { transform: translateY(0); }
+      }
+      
+      .assistance-prompt:after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        right: 20px;
+        width: 0;
+        height: 0;
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-top: 10px solid rgba(0, 123, 255, 0.9);
       }
     `;
     document.head.appendChild(styleElement);
@@ -646,13 +821,82 @@ export const VRScene = ({ onBackToHome }) => {
     }
   };
 
-  // Function to dismiss avatar and stop audio
-  const dismissAvatar = () => {
+  // Function to dismiss robot message and stop audio
+  const dismissRobotMessage = () => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
-    setShowAvatar(false);
+    setShowRobotMessage(false);
+    setIsRobotTalking(false);
+  };
+
+  // Function to toggle robot message
+  const toggleRobotMessage = () => {
+    if (!showRobotMessage) {
+      setShowRobotMessage(true);
+      setShowAssistancePrompt(false);
+    } else {
+      dismissRobotMessage();
+    }
+  };
+
+  // Function to toggle location menu
+  const toggleLocationMenu = (e) => {
+    e.stopPropagation();
+    setShowLocationMenu(!showLocationMenu);
+  };
+
+  // Function to change location
+  const changeLocation = (location, e) => {
+    e.stopPropagation();
+    setCurrentLocation(location);
+    
+    // Stop current audio if playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    
+    // Update audio source and make sure to show the message
+    audioRef.current.src = collegeLocations[location].audioFile;
+    setShowRobotMessage(true);
+    
+    // Play audio for new location
+    setIsRobotTalking(true);
+    audioRef.current.play().catch(err => {
+      console.error("Error playing audio:", err);
+    });
+    
+    console.log(`Changed to location: ${location}, Audio: ${collegeLocations[location].audioFile}`);
+  };
+
+  // Function to play location audio without changing location
+  const playLocationAudio = (location, e) => {
+    e.stopPropagation();
+    
+    // Make sure message is visible
+    setShowRobotMessage(true);
+    
+    // Stop current audio if playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    
+    // Update location to ensure description is shown
+    setCurrentLocation(location);
+    
+    // Update audio source
+    audioRef.current.src = collegeLocations[location].audioFile;
+    
+    // Play audio
+    setIsRobotTalking(true);
+    audioRef.current.play().catch(err => {
+      console.error("Error playing audio:", err);
+    });
+    
+    console.log(`Playing audio for: ${location}, Audio: ${collegeLocations[location].audioFile}`);
   };
 
   // Load the panorama
@@ -713,6 +957,16 @@ export const VRScene = ({ onBackToHome }) => {
     setCurrentInfo(info);
     setShowInfoPanel(true);
     if (showNavigationPanel) setShowNavigationPanel(false);
+  };
+
+  // Function to stop audio playback
+  const stopAudio = (e) => {
+    e.stopPropagation();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsRobotTalking(false);
+    }
   };
 
   if (isLoading) {
@@ -797,7 +1051,7 @@ export const VRScene = ({ onBackToHome }) => {
         height: '100vh', 
         position: 'relative', 
         overflow: 'hidden'
-      }} onClick={dismissAvatar}>
+      }} onClick={dismissRobotMessage}>
         {/* Single iframe for panorama */}
         <iframe 
           ref={iframeRef}
@@ -818,31 +1072,156 @@ export const VRScene = ({ onBackToHome }) => {
         />
         
         {/* Welcome Audio */}
-        <audio ref={audioRef} src="/voicce/welcome.mp3" preload="auto" />
+        <audio 
+          ref={audioRef} 
+          src={collegeLocations[currentLocation].audioFile} 
+          preload="auto" 
+          onEnded={() => setIsRobotTalking(false)} 
+        />
         
-        {/* AI Avatar */}
+        {/* Robot Assistant */}
         <div 
-          className={`avatar-container ${showAvatar ? '' : 'hidden'}`} 
+          className="robot-assistant"
           onClick={(e) => {
             e.stopPropagation();
-            dismissAvatar();
+            toggleRobotMessage();
           }}
         >
-          <div className="avatar-circle">
+          {showAssistancePrompt && (
+            <div className="assistance-prompt">
+              Welcome to BMSIT! Click for assistance
+            </div>
+          )}
+          
+          <div className="robot-container">
             <img 
-              src="https://cdn-icons-png.flaticon.com/512/4616/4616091.png" 
-              alt="AI Avatar" 
-              className="avatar-image"
+              src="/assets/360-images/robot.gif" 
+              alt="AI Assistant" 
+              className="robot-image"
             />
-            <button className="avatar-close" onClick={dismissAvatar}>×</button>
-          </div>
-          <div className="avatar-message">
-            <div className="avatar-title">Welcome to BMSIT!</div>
-            <p>Welcome to BMS Institute of Technology and Management. I'll be your virtual guide for this tour. Click anywhere to explore the campus on your own.</p>
-            <div className="listening-indicator">
-              <div className="listening-dot"></div>
-              <div className="listening-dot"></div>
-              <div className="listening-dot"></div>
+            
+            <div className={`robot-message ${showRobotMessage ? '' : 'hidden'}`} onClick={(e) => e.stopPropagation()}>
+              <button 
+                className="robot-close" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissRobotMessage();
+                }}
+              >×</button>
+              <div className="robot-title">{collegeLocations[currentLocation].title}</div>
+              <div className="robot-text">
+                {collegeLocations[currentLocation].description}
+              </div>
+              
+              {isRobotTalking && (
+                <div className="listening-indicator">
+                  <div className="listening-dot"></div>
+                  <div className="listening-dot"></div>
+                  <div className="listening-dot"></div>
+                </div>
+              )}
+              
+              <button className="menu-button" onClick={toggleLocationMenu}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 12H21M3 6H21M3 18H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {showLocationMenu ? 'Hide Locations' : 'Show Locations'}
+              </button>
+              
+              {showLocationMenu && (
+                <div className="location-menu">
+                  <div 
+                    className={`location-item ${currentLocation === 'welcome' ? 'active' : ''}`}
+                    onClick={(e) => changeLocation('welcome', e)}
+                  >
+                    <span>Welcome</span>
+                    <div 
+                      className="play-button" 
+                      onClick={(e) => playLocationAudio('welcome', e)}
+                      title="Play Audio"
+                    >
+                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 5.13397C10.1667 5.51888 10.1667 6.48112 9.5 6.86603L1.5 11.4641C0.833333 11.849 0 11.3679 0 10.598V1.40192C0 0.632141 0.833333 0.151046 1.5 0.535898L9.5 5.13397Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div 
+                    className={`location-item ${currentLocation === 'bsnBlock' ? 'active' : ''}`}
+                    onClick={(e) => changeLocation('bsnBlock', e)}
+                  >
+                    <span>BSN Block</span>
+                    <div 
+                      className="play-button" 
+                      onClick={(e) => playLocationAudio('bsnBlock', e)}
+                      title="Play Audio"
+                    >
+                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 5.13397C10.1667 5.51888 10.1667 6.48112 9.5 6.86603L1.5 11.4641C0.833333 11.849 0 11.3679 0 10.598V1.40192C0 0.632141 0.833333 0.151046 1.5 0.535898L9.5 5.13397Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div 
+                    className={`location-item ${currentLocation === 'academicBlock' ? 'active' : ''}`}
+                    onClick={(e) => changeLocation('academicBlock', e)}
+                  >
+                    <span>Academic Block</span>
+                    <div 
+                      className="play-button" 
+                      onClick={(e) => playLocationAudio('academicBlock', e)}
+                      title="Play Audio"
+                    >
+                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 5.13397C10.1667 5.51888 10.1667 6.48112 9.5 6.86603L1.5 11.4641C0.833333 11.849 0 11.3679 0 10.598V1.40192C0 0.632141 0.833333 0.151046 1.5 0.535898L9.5 5.13397Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div 
+                    className={`location-item ${currentLocation === 'labBlock' ? 'active' : ''}`}
+                    onClick={(e) => changeLocation('labBlock', e)}
+                  >
+                    <span>Lab Block</span>
+                    <div 
+                      className="play-button" 
+                      onClick={(e) => playLocationAudio('labBlock', e)}
+                      title="Play Audio"
+                    >
+                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 5.13397C10.1667 5.51888 10.1667 6.48112 9.5 6.86603L1.5 11.4641C0.833333 11.849 0 11.3679 0 10.598V1.40192C0 0.632141 0.833333 0.151046 1.5 0.535898L9.5 5.13397Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div 
+                    className={`location-item ${currentLocation === 'coffeeKuteera' ? 'active' : ''}`}
+                    onClick={(e) => changeLocation('coffeeKuteera', e)}
+                  >
+                    <span>Coffee Kuteera</span>
+                    <div 
+                      className="play-button" 
+                      onClick={(e) => playLocationAudio('coffeeKuteera', e)}
+                      title="Play Audio"
+                    >
+                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 5.13397C10.1667 5.51888 10.1667 6.48112 9.5 6.86603L1.5 11.4641C0.833333 11.849 0 11.3679 0 10.598V1.40192C0 0.632141 0.833333 0.151046 1.5 0.535898L9.5 5.13397Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div 
+                    className={`location-item ${currentLocation === 'bmssa' ? 'active' : ''}`}
+                    onClick={(e) => changeLocation('bmssa', e)}
+                  >
+                    <span>BMS School of Architecture</span>
+                    <div 
+                      className="play-button" 
+                      onClick={(e) => playLocationAudio('bmssa', e)}
+                      title="Play Audio"
+                    >
+                      <svg width="10" height="12" viewBox="0 0 10 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9.5 5.13397C10.1667 5.51888 10.1667 6.48112 9.5 6.86603L1.5 11.4641C0.833333 11.849 0 11.3679 0 10.598V1.40192C0 0.632141 0.833333 0.151046 1.5 0.535898L9.5 5.13397Z" fill="white"/>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
