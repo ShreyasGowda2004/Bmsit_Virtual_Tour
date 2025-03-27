@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 // Import A-Frame once at the component level
 import 'aframe';
 // Import A-Frame React components after A-Frame is loaded
@@ -114,54 +114,6 @@ if (typeof AFRAME !== 'undefined') {
       document.removeEventListener('mouseup', this.onMouseUp);
     }
   });
-
-  // Register the stereo component if not already registered
-  if (!AFRAME.components['stereo']) {
-    AFRAME.registerComponent('stereo', {
-      schema: {
-        eye: {type: 'string', default: 'left'},
-        mode: {type: 'string', default: 'both'}
-      },
-      
-      init: function () {
-        this.layer = this.el.object3D.layers;
-        this.camera = this.el.getObject3D('camera');
-        this.updateLayers();
-        
-        // Handle VR display activation
-        this.el.sceneEl.addEventListener('enter-vr', this.updateLayers.bind(this));
-        this.el.sceneEl.addEventListener('exit-vr', this.updateLayers.bind(this));
-      },
-      
-      updateLayers: function() {
-        const isVRActive = this.el.sceneEl.is('vr-mode');
-        
-        // For non-VR mode or 'both' mode, use all layers
-        if (!isVRActive || this.data.mode === 'both') {
-          this.layer.set(0);
-          if (this.camera) {
-            this.camera.layers.enable(0);
-          }
-          return;
-        }
-        
-        // VR mode with eye-specific layers
-        if (this.data.eye === 'left') {
-          // Left eye - Layer 1
-          this.layer.set(1);
-          if (this.camera) {
-            this.camera.layers.enable(1);
-          }
-        } else if (this.data.eye === 'right') {
-          // Right eye - Layer 2
-          this.layer.set(2);
-          if (this.camera) {
-            this.camera.layers.enable(2);
-          }
-        }
-      }
-    });
-  }
 }
 
 // Update the VR loading animation styles with more professional effects
@@ -490,72 +442,9 @@ export const VRScene = ({ onBackToHome }) => {
   const [showNavigationPanel, setShowNavigationPanel] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [currentInfo, setCurrentInfo] = useState('');
-  const [inVRMode, setInVRMode] = useState(false);
-  const [currentScene, setCurrentScene] = useState(1);
 
-  // Reference to A-Frame scene
-  const sceneRef = useRef(null);
-
-  // Add state for VR support detection
-  const [hasVRSupport, setHasVRSupport] = useState(false);
-  
-  // Check for WebVR/WebXR support
-  useEffect(() => {
-    const checkVRSupport = () => {
-      // Check for WebXR
-      if (navigator.xr) {
-        navigator.xr.isSessionSupported('immersive-vr')
-          .then(supported => {
-            setHasVRSupport(supported);
-          })
-          .catch(() => setHasVRSupport(false));
-      } 
-      // Check for older WebVR
-      else if (navigator.getVRDisplays) {
-        navigator.getVRDisplays()
-          .then(displays => {
-            setHasVRSupport(displays && displays.length > 0);
-          })
-          .catch(() => setHasVRSupport(false));
-      } else {
-        setHasVRSupport(false);
-      }
-    };
-    
-    checkVRSupport();
-  }, []);
-
-  // Function to preload images
-  const preloadImage = (sceneNumber) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        console.log(`Successfully loaded image ${sceneNumber}.jpg`);
-        resolve();
-      };
-      img.onerror = () => {
-        console.error(`Failed to load image ${sceneNumber}.jpg`);
-        reject(new Error(`Failed to load image ${sceneNumber}.jpg`));
-      };
-      // Load from src/assets directory with cache busting
-      img.src = `/src/assets/360-images/${sceneNumber}.jpg?cache=${Date.now()}`;
-      console.log(`Loading image: ${img.src}`);
-    });
-  };
-
-  // Function to enter VR mode
-  const enterVR = () => {
-    if (sceneRef.current) {
-      const sceneEl = sceneRef.current.sceneEl;
-      if (sceneEl.is('vr-mode')) {
-        sceneEl.exitVR();
-        setInVRMode(false);
-      } else {
-        sceneEl.enterVR();
-        setInVRMode(true);
-      }
-    }
-  };
+  // External panorama URL from Panoraven
+  const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
 
   // Load the panorama
   useEffect(() => {
@@ -691,160 +580,37 @@ export const VRScene = ({ onBackToHome }) => {
     );
   }
 
-  // Using A-Frame for VR scene
+  // Render using iframe for external panorama instead of A-Frame
   return (
     <ErrorBoundary onBackToHome={onBackToHome}>
       <div className="vr-container" style={{ width: '100%', height: '100vh', position: 'relative' }}>
-        <Scene 
-          ref={sceneRef} 
-          vr-mode-ui={{ enabled: true }}
-          embedded
-          loading-screen="enabled: false" 
-          renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true;"
-          stats={process.env.NODE_ENV === 'development'}
-        >
-          {/* 360-degree sky background */}
-          <Entity
-            primitive="a-sky"
-            src={`/src/assets/360-images/${currentScene}.jpg?cache=${Date.now()}`}
-            rotation="0 0 0"
-            simple-mouse-drag-control
-          />
-
-          {/* Camera with controls */}
-          <Entity
-            primitive="a-camera"
-            position="0 1.6 0"
-            look-controls={{ reverseMouseDrag: false }}
-            wasd-controls={{ enabled: false }}
-            stereo="eye: left"
-          />
-          
-          {/* For stereoscopic view in VR */}
-          <Entity
-            id="vr-annotations"
-            visible={inVRMode}
-          >
-            {/* You can add VR-specific UI elements here */}
-          </Entity>
-        </Scene>
+        <iframe 
+          width="100%" 
+          height="100%" 
+          allowFullScreen={true} 
+          allow="accelerometer; magnetometer; gyroscope" 
+          style={{ border: '0 none', borderRadius: '8px', boxShadow: '0 1px 1px rgba(0,0,0,0.11),0 2px 2px rgba(0,0,0,0.11),0 4px 4px rgba(0,0,0,0.11),0 6px 8px rgba(0,0,0,0.11),0 8px 16px rgba(0,0,0,0.11)' }} 
+          src={panoramaUrl}
+        />
         
-        {/* Control Buttons */}
-        <div className="vr-controls" style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '0',
-          width: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '15px',
-          zIndex: 1000
-        }}>
-          {/* Home Button */}
-          <button 
-            onClick={onBackToHome}
-            style={{
-              padding: '12px 20px',
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M9 22V12H15V22" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Home
-          </button>
-          
-          {/* VR Mode Button - Only show if VR is supported */}
-          {hasVRSupport && (
-            <button 
-              onClick={enterVR}
-              style={{
-                padding: '12px 20px',
-                backgroundColor: inVRMode ? 'rgba(0, 153, 255, 0.8)' : 'rgba(0, 0, 0, 0.7)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
-              }}
-            >
-              <svg width="20" height="14" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M19.5 3C19.5 2.20435 19.1839 1.44129 18.6213 0.87868C18.0587 0.316071 17.2956 0 16.5 0H3.5C2.70435 0 1.94129 0.316071 1.37868 0.87868C0.816071 1.44129 0.5 2.20435 0.5 3V11C0.5 11.7956 0.816071 12.5587 1.37868 13.1213C1.94129 13.6839 2.70435 14 3.5 14H16.5C17.2956 14 18.0587 13.6839 18.6213 13.1213C19.1839 12.5587 19.5 11.7956 19.5 11V3ZM2.5 7C2.5 5.93913 2.92143 4.92172 3.67157 4.17157C4.42172 3.42143 5.43913 3 6.5 3C7.56087 3 8.57828 3.42143 9.32843 4.17157C10.0786 4.92172 10.5 5.93913 10.5 7C10.5 8.06087 10.0786 9.07828 9.32843 9.82843C8.57828 10.5786 7.56087 11 6.5 11C5.43913 11 4.42172 10.5786 3.67157 9.82843C2.92143 9.07828 2.5 8.06087 2.5 7ZM13.5 3C14.5609 3 15.5783 3.42143 16.3284 4.17157C17.0786 4.92172 17.5 5.93913 17.5 7C17.5 8.06087 17.0786 9.07828 16.3284 9.82843C15.5783 10.5786 14.5609 11 13.5 11C12.4391 11 11.4217 10.5786 10.6716 9.82843C9.92143 9.07828 9.5 8.06087 9.5 7C9.5 5.93913 9.92143 4.92172 10.6716 4.17157C11.4217 3.42143 12.4391 3 13.5 3Z" fill="white"/>
-              </svg>
-              {inVRMode ? "Exit VR" : "Enter VR"}
-            </button>
-          )}
-          
-          {/* If VR is not supported, show message */}
-          {!hasVRSupport && (
-            <div style={{
-              padding: '12px 20px',
-              backgroundColor: 'rgba(150, 0, 0, 0.7)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              fontSize: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" strokeWidth="2"/>
-                <path d="M15 9L9 15" stroke="white" strokeWidth="2"/>
-                <path d="M9 9L15 15" stroke="white" strokeWidth="2"/>
-              </svg>
-              VR Not Available
-            </div>
-          )}
-        </div>
-
-        {/* Add stylesheet for VR mode */}
-        <style>
-          {`
-            .a-enter-vr {
-              position: absolute;
-              bottom: 20px;
-              right: 20px;
-            }
-            .a-enter-vr-button {
-              background-color: rgba(0, 0, 0, 0.7) !important;
-              border-radius: 5px !important;
-              border: none !important;
-              display: none !important;
-            }
-            /* Styles for stereoscopic view */
-            .a-scene.fullscreen {
-              width: 100% !important;
-              height: 100% !important;
-              top: 0 !important;
-              left: 0 !important;
-              right: 0 !important;
-              bottom: 0 !important;
-              position: fixed !important;
-              z-index: 9999 !important;
-            }
-            .a-scene.vr-mode {
-              width: 100% !important;
-              height: 100% !important;
-            }
-          `}
-        </style>
+        {/* Home Button - Fixed on top */}
+        <button 
+          onClick={onBackToHome}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            padding: '10px 20px',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            zIndex: 1000
+          }}
+        >
+          Back to Home
+        </button>
       </div>
     </ErrorBoundary>
   );
