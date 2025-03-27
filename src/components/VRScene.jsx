@@ -443,9 +443,11 @@ export const VRScene = ({ onBackToHome }) => {
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [currentInfo, setCurrentInfo] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showAvatar, setShowAvatar] = useState(true);
 
-  // Reference to the iframe
+  // Reference to the iframe and audio
   const iframeRef = useRef(null);
+  const audioRef = useRef(null);
 
   // External panorama URL from Panoraven
   const panoramaUrl = "https://panoraven.com/en/embed/jYfYXbfXoD";
@@ -465,6 +467,148 @@ export const VRScene = ({ onBackToHome }) => {
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Play welcome message when tour loads
+  useEffect(() => {
+    if (!isLoading && showAvatar && audioRef.current) {
+      // Play audio after a small delay to ensure everything is loaded
+      const timer = setTimeout(() => {
+        audioRef.current.play().catch(err => {
+          console.error("Error playing audio:", err);
+        });
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, showAvatar]);
+
+  // Add CSS for avatar
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      .avatar-container {
+        position: absolute;
+        bottom: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        z-index: 1000;
+        transition: all 0.3s ease-in-out;
+      }
+      
+      .avatar-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(0, 123, 255, 0.5);
+        overflow: hidden;
+        margin-bottom: 15px;
+      }
+      
+      .avatar-image {
+        width: 90%;
+        height: 90%;
+        object-fit: cover;
+        border-radius: 50%;
+      }
+      
+      .avatar-message {
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px 25px;
+        border-radius: 20px;
+        color: white;
+        max-width: 80%;
+        text-align: center;
+        font-size: 16px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(5px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 10px;
+      }
+      
+      .avatar-close {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        width: 30px;
+        height: 30px;
+        background: rgba(255, 0, 0, 0.7);
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        color: white;
+        font-weight: bold;
+        border: none;
+        font-size: 16px;
+      }
+      
+      .avatar-title {
+        color: rgba(0, 123, 255, 1);
+        font-weight: bold;
+        margin-bottom: 5px;
+        font-size: 18px;
+      }
+      
+      .avatar-container.hidden {
+        opacity: 0;
+        transform: translateY(50px) translateX(-50%);
+        pointer-events: none;
+      }
+      
+      .listening-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+        margin-top: 5px;
+      }
+      
+      .listening-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #0078ff;
+        border-radius: 50%;
+        animation: pulse 1.5s infinite ease-in-out;
+      }
+      
+      .listening-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      
+      .listening-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      
+      @keyframes pulse {
+        0% {
+          transform: scale(0.8);
+          opacity: 0.5;
+        }
+        50% {
+          transform: scale(1.2);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(0.8);
+          opacity: 0.5;
+        }
+      }
+    `;
+    document.head.appendChild(styleElement);
+    
+    return () => {
+      document.head.removeChild(styleElement);
     };
   }, []);
 
@@ -500,6 +644,15 @@ export const VRScene = ({ onBackToHome }) => {
     } catch (err) {
       console.error("Error toggling fullscreen:", err);
     }
+  };
+
+  // Function to dismiss avatar and stop audio
+  const dismissAvatar = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setShowAvatar(false);
   };
 
   // Load the panorama
@@ -644,7 +797,7 @@ export const VRScene = ({ onBackToHome }) => {
         height: '100vh', 
         position: 'relative', 
         overflow: 'hidden'
-      }}>
+      }} onClick={dismissAvatar}>
         {/* Single iframe for panorama */}
         <iframe 
           ref={iframeRef}
@@ -664,6 +817,36 @@ export const VRScene = ({ onBackToHome }) => {
           src={panoramaUrl}
         />
         
+        {/* Welcome Audio */}
+        <audio ref={audioRef} src="/voicce/welcome.mp3" preload="auto" />
+        
+        {/* AI Avatar */}
+        <div 
+          className={`avatar-container ${showAvatar ? '' : 'hidden'}`} 
+          onClick={(e) => {
+            e.stopPropagation();
+            dismissAvatar();
+          }}
+        >
+          <div className="avatar-circle">
+            <img 
+              src="https://cdn-icons-png.flaticon.com/512/4616/4616091.png" 
+              alt="AI Avatar" 
+              className="avatar-image"
+            />
+            <button className="avatar-close" onClick={dismissAvatar}>×</button>
+          </div>
+          <div className="avatar-message">
+            <div className="avatar-title">Welcome to BMSIT!</div>
+            <p>Welcome to BMS Institute of Technology and Management. I'll be your virtual guide for this tour. Click anywhere to explore the campus on your own.</p>
+            <div className="listening-indicator">
+              <div className="listening-dot"></div>
+              <div className="listening-dot"></div>
+              <div className="listening-dot"></div>
+            </div>
+          </div>
+        </div>
+        
         {/* Control Buttons Container */}
         <div className="controls" style={{
           position: 'absolute',
@@ -679,7 +862,10 @@ export const VRScene = ({ onBackToHome }) => {
         }}>
           {/* Home Button */}
           <button 
-            onClick={onBackToHome}
+            onClick={(e) => {
+              e.stopPropagation();
+              onBackToHome();
+            }}
             style={{
               padding: '12px 20px',
               backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -707,7 +893,10 @@ export const VRScene = ({ onBackToHome }) => {
           
           {/* Fullscreen Button */}
           <button 
-            onClick={toggleFullscreen}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFullscreen();
+            }}
             style={{
               padding: '12px 20px',
               backgroundColor: isFullscreen ? 'rgba(0, 153, 255, 0.8)' : 'rgba(0, 0, 0, 0.7)',
